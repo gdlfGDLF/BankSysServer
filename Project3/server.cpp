@@ -145,6 +145,8 @@ void BankServer::handleClient(SOCKET client_socket) {
 
     if (bytes_read > 0) {
         std::string request(buffer, bytes_read);
+        std::cout << "收到请求: " << request << std::endl;
+
         std::string response = RequestHandler::processRequest(request);
 
         std::cout << "发送响应: " << response << std::endl;

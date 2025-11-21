@@ -10,7 +10,7 @@ std::string RequestHandler::processRequest(const std::string& request_str) {
         Json::Value root;
         Json::CharReaderBuilder reader;
         std::string errors;
-
+       
         std::istringstream jsonStream(request_str);
         if (!Json::parseFromStream(reader, jsonStream, &root, &errors)) {
             std::cout << "JSON解析失败: " << errors << std::endl;
@@ -31,15 +31,30 @@ std::string RequestHandler::processRequest(const std::string& request_str) {
             std::cout << "密码: " << password << std::endl;
             std::cout << "登录时间: " << loginTime << std::endl;
 
-            return handleUserLogin(username, password);
-        }
+                return handleUserLogin(username, password);
+            }
         else {
             std::cout << "缺少 data 字段或 data 不是对象" << std::endl;
 
-            return createErrorResponse("无法解析登录信息");
-        }
+        return createErrorResponse("无法解析登录信息");
+    }
+    else if (request_str.find("\"action\":\"get_users\"") != std::string::npos) {
+        return handleGetUsers();
+    }
+    else if (request_str.find("\"action\":\"add_user\"") != std::string::npos) {
+        return handleAddUser();
+    }
+    else if (request_str.find("\"action\":\"test_connection\"") != std::string::npos) {
+        return handleTestConnection();
+    }
+    else {
+        return createErrorResponse("未知的请求类型");
+    }
 }
 
+std::string RequestHandler::handleTestConnection() {
+    return buildJsonResponse(true, "C++服务器连接正常", R"("server":"Bank CRM System","timestamp":"2024-01-15 10:00:00")");
+}
 
 std::string RequestHandler::handleUserLogin(const std::string& username, const std::string& password) {
     Json::Value response;
@@ -63,7 +78,7 @@ std::string RequestHandler::handleUserLogin(const std::string& username, const s
     else {
         response["success"] = false;
         response["error"] = "用户名或密码错误";
-    }
+}
 
     return Json::writeString(writer, response);
 }
