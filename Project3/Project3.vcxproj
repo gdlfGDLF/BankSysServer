@@ -24,6 +24,7 @@
     <ClInclude Include="server.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ConnectionPool.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="request_handler.cpp" />
     <ClCompile Include="server.cpp" />

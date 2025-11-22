@@ -2,15 +2,15 @@
 #include <iostream>
 #include <string>
 #include <sstream>
-
+#include"ConnectionPool.h"
 
 std::string RequestHandler::processRequest(const std::string& request_str) {
-        //std::cout << "📨 收到原始请求: " << request_str << std::endl;
+        //std::cout << " 收到原始请求: " << request_str << std::endl;
 
         Json::Value root;
         Json::CharReaderBuilder reader;
         std::string errors;
-       
+        Json::StreamWriterBuilder writer;
         std::istringstream jsonStream(request_str);
         if (!Json::parseFromStream(reader, jsonStream, &root, &errors)) {
             std::cout << "JSON解析失败: " << errors << std::endl;
@@ -18,88 +18,114 @@ std::string RequestHandler::processRequest(const std::string& request_str) {
         // 1. 首先提取 action
         std::string action = root["action"].asString();
         std::cout << "动作: " << action << std::endl;
+        if (action == "user_login")
+        {
+            return handleUserLogin(request_str);
+        }
+}
 
-        // 2. 然后从 data 对象中提取登录信息
-        if (root.isMember("data") && root["data"].isObject()) {
-            Json::Value data = root["data"];
 
-            std::string username = data["username"].asString();
-            std::string password = data["password"].asString();
-            std::string loginTime = data["LoginTime"].asString(); // 注意字段名是 "Date"
+std::string RequestHandler::handleUserLogin(const std::string& Request) {
+    Json::Value root;
+    Json::CharReaderBuilder reader;
+    std::string errors;
+   
+    std::istringstream jsonStream(Request);
+    if (!Json::parseFromStream(reader, jsonStream, &root, &errors)) {
+        std::cout << "❌ 登录请求JSON解析失败: " << errors << std::endl;
+        return createErrorResponse("登录请求格式错误");
+    }
+    if (!root.isMember("data") || !root["data"].isObject()) {
+        std::cout << "❌ 登录请求缺少data字段" << std::endl;
+        return createErrorResponse("登录信息不完整");
+    }
+    Json::Value data = root["data"];
+    std::string username = data["username"].asString();
+    std::string password = data["password"].asString();
 
-            std::cout << "用户名: " << username << std::endl;
-            std::cout << "密码: " << password << std::endl;
-            std::cout << "登录时间: " << loginTime << std::endl;
+    std::cout << "登录尝试 - 用户名: " << username << std::endl;
+    return ValidLoginInfo(username,password);
+}
 
-                return handleUserLogin(username, password);
-            }
+std::string RequestHandler::ValidLoginInfo(const std::string& username, const std::string& password)
+{
+    try {
+        //JS=角色 Name用户名 Pw=密码
+        DatabaseGuard db = DatabaseManager::GetUseInfoCon();
+        sql::PreparedStatement* pstmt = db->prepareStatement(
+            "SELECT Qdvh_ID, Qdvh_Name, Qdvh_Js FROM userinfo WHERE Qdvh_Name = ? AND Qdvh_Pw = ?"
+        );
+        pstmt->setString(1, username);
+        pstmt->setString(2, password);  // 明文比较
+        //std::cout << "compare un,pw" << std::endl;
+        sql::ResultSet* res = pstmt->executeQuery();
+        std::cout << username << "  " << password << std::endl;
+
+        Json::Value response;
+        Json::StreamWriterBuilder writer;
+
+        if (res->next()) {
+            // 登录成功
+            int userId = res->getInt("Qdvh_ID");
+            std::string userName = res->getString("Qdvh_Name");
+            std::string role = res->getString("Qdvh_Js");
+
+            std::cout << "登录成功 - 用户ID: " << userId
+                << ", 用户名: " << userName
+                << ", 角色: " << role << std::endl;
+
+            response["success"] = true;
+            response["token"] = "success";
+            response["role"] = role;
+            response["user"] = userName;
+            response["user_id"] = userId;
+        }
         else {
-            std::cout << "缺少 data 字段或 data 不是对象" << std::endl;
+            // 登录失败
+            std::cout << "❌ 登录失败 - 用户名或密码错误" << std::endl;
+            response["success"] = false;
+            response["error"] = "用户名或密码错误";
+        }
 
-        return createErrorResponse("无法解析登录信息");
+        delete res;
+        delete pstmt;
+        return Json::writeString(writer, response);
+
     }
-    else if (request_str.find("\"action\":\"get_users\"") != std::string::npos) {
-        return handleGetUsers();
+    catch (sql::SQLException& e) {
+        std::cout << "💥 数据库错误: " << e.what() << std::endl;
+        return createErrorResponse("数据库操作失败");
     }
-    else if (request_str.find("\"action\":\"add_user\"") != std::string::npos) {
-        return handleAddUser();
-    }
-    else if (request_str.find("\"action\":\"test_connection\"") != std::string::npos) {
-        return handleTestConnection();
-    }
-    else {
-        return createErrorResponse("未知的请求类型");
-    }
+
+    
 }
 
-std::string RequestHandler::handleTestConnection() {
-    return buildJsonResponse(true, "C++服务器连接正常", R"("server":"Bank CRM System","timestamp":"2024-01-15 10:00:00")");
-}
 
-std::string RequestHandler::handleUserLogin(const std::string& username, const std::string& password) {
-    Json::Value response;
-    Json::StreamWriterBuilder writer;
 
-    if (username == "admin" && password == "admin123") {
-        response["success"] = true;
-        response["token"] = "admin_token_123456";
-        response["role"] = "admin";
-    }
-    else if (username == "sales" && password == "sales123") {
-        response["success"] = true;
-        response["token"] = "sales_token_123456";
-        response["role"] = "sales_manager";  // 返回角色信息
-    }
-    else if (username == "customer" && password == "customer123") {
-        response["success"] = true;
-        response["token"] = "customer_token_123456";
-        response["role"] = "customer_manager";  // 返回角色信息
-    }
-    else {
-        response["success"] = false;
-        response["error"] = "用户名或密码错误";
-}
 
-    return Json::writeString(writer, response);
-}
 
-//std::string RequestHandler::handleGetUsers() {
-//    std::cout << "👥 处理获取用户列表请求" << std::endl;
-//
-//    std::string usersData = R"("users":[
-//        {"id":1,"username":"admin","display_name":"系统管理员","email":"admin@bank.com","role":"admin","is_active":true,"created_at":"2024-01-15 10:00:00"},
-//        {"id":2,"username":"zhangsan","display_name":"张三","email":"zhangsan@bank.com","role":"sales_manager","is_active":true,"created_at":"2024-01-16 14:30:00"}
-//    ],"total":2,"page":1,"limit":10)";
-//
-//    return buildJsonResponse(true, "获取用户列表成功", usersData);
-//}
-//
-//std::string RequestHandler::handleAddUser() {
-//    std::cout << "➕ 处理添加用户请求" << std::endl;
-//
-//    std::string responseData = R"("user_id":3,"message":"用户添加成功")";
-//    return buildJsonResponse(true, "用户添加成功", responseData);
-//}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 std::string RequestHandler::createErrorResponse(const std::string& error) {
     Json::Value response;
